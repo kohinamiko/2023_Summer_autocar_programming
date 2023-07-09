@@ -23,7 +23,9 @@ class Camera():
         ## 일반 변수 선언
         self.cv_bridge = CvBridge()   
         self.Trackbar_flag = False 
-        self.Moment = []
+        self.Moment = {}
+        self.Left = []
+        self.Right = []
         rospy.spin()
 
     def CamCallback(self,data):
@@ -40,6 +42,8 @@ class Camera():
         cv2.imshow("Cam",cam_img)
         cv2.waitKey(1)
         self.Moment.clear()
+        self.Left.clear()
+        self.Right.clear()
 
     def LaneFind(self, frame):
         
@@ -99,24 +103,43 @@ class Camera():
         ret, img_bin_yellow = cv2.threshold(img_yellow,thresh1,255,cv2.THRESH_BINARY)
         ret, img_bin_white = cv2.threshold(img_white,thresh1,255,cv2.THRESH_BINARY)        
         ret, img_bin = cv2.threshold(img_gray,thresh1,255,cv2.THRESH_BINARY)
+
         img_bin = img_bin[240:,:]
         img = img[240:,:]
+
         ## contours
         contour, hierarchy = cv2.findContours(img_bin,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
         cv2.drawContours(img,contour,-1,(0,255,0),4)
-        print("컨투어 개수 : ",len(contour))
-        ## moment
+        print("컨투어 개수 : ",len(contour)) ## 컨투어 개수가 이상하게 많이 나올 때 LV값을 높이면 사라진다.
+
+        ## moment       
+        ''' 
+        점이 3개 이상 나타날 경우 카메라 기준 좌우로 나눈다.
+        왼쪽 기준 x값이 가장 큰 것, 오른쪽 기준 x값이 가장 작은 것을 택함
+        왠만해서 내 차로의 좌표를 구할 가능성이 높다.
+        '''
         for c in contour :
             # 모멘트 계산
             mmt = cv2.moments(c)
             
             #print(mmt["m00"])
             #x,y 값 찾기
+            if mmt["m00"] == 0:
+                continue
+
             cx = int(mmt["m10"]/mmt["m00"])
             cy = int(mmt["m01"]/mmt["m00"])
-            self.Moment.append((cx,cy))
             cv2.circle(img, (cx,cy),5,(0,0,255),-1)
 
+            # x,y좌표 저장  제어기에서 x좌표 꺼내서 왼쪽, 오른쪽 좌표 찾아낼 것
+            self.Moment[cx] = cy
+            
+            if cx <= 320: # 카메라 마다 가운데가 다름
+                self.Left.append(cx)
+            else:
+                self.Right.append(cx)
+
+        cv2.circle(img,(320,120),5,(255,255,0),-1)
         ### 이미지 보기
         # cv2.imshow("Yellow",img_yellow)
         # cv2.imshow("White",img_white)
@@ -126,7 +149,13 @@ class Camera():
         # cv2.imshow("bin_yellow",img_bin_yellow)
         # cv2.imshow("bin_white",img_bin_white)
         cv2.imshow("bin_white_yellow",img_bin)
+
+
         print(self.Moment)
+        # min_xl = min(self.Left)
+        # min_xr = min(self.Right)
+        # print(self.Left, self.Right)
+        # print(min_xl, min_xr)
         
 
 
